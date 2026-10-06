@@ -2,17 +2,22 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Vinted Schablone</title>
 <style>
 :root{
   --bg:#eef0f0;--panel:#fff;--ink:#171c1d;--mute:#6b7578;--line:#dadfe0;--soft:#f4f6f6;
   --acc:#0b6e75;--accInk:#fff;--shadow:0 1px 2px rgba(0,0,0,.05),0 8px 24px -14px rgba(0,0,0,.18);
-  --ease:cubic-bezier(.2,.8,.2,1)
+  --ease:cubic-bezier(.2,.8,.2,1);
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)
 }
-@media (prefers-color-scheme:dark){:root{
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#121516;--panel:#1a1e1f;--ink:#e8eced;--mute:#8e999c;--line:#2b3234;--soft:#222829;
   --acc:#4fb3b9;--accInk:#0a1415;--shadow:0 8px 24px -14px rgba(0,0,0,.6)}}
+:root[data-theme="dark"]{
+  --bg:#121516;--panel:#1a1e1f;--ink:#e8eced;--mute:#8e999c;--line:#2b3234;--soft:#222829;
+  --acc:#4fb3b9;--accInk:#0a1415;--shadow:0 8px 24px -14px rgba(0,0,0,.6)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{margin:0;min-height:100vh;color:var(--ink);font:15px/1.45 "Segoe UI Variable Text","Segoe UI",system-ui,Arial,sans-serif;background:var(--bg)}
@@ -99,15 +104,15 @@ canvas{width:100%;height:auto;display:block;touch-action:pan-y;-webkit-touch-cal
     </div>
     <input type="file" id="file" class="fi" accept="image/*" multiple tabindex="-1" aria-hidden="true">
     <div class="err" id="err"></div>
- 
-    <div><label class="l">Layout</label><div class="seg" id="segLayout" style="grid-template-columns:repeat(4,1fr)"></div></div>
- 
+
+    <div><label class="l">Layout</label><div class="seg" id="segLayout" style="grid-template-columns:repeat(5,1fr)"></div></div>
+
     <div class="edit" id="cust" hidden>
       <div class="hd"><span>Eigenes Layout</span><small>max. 12 Felder</small></div>
       <div id="crows" style="display:flex;flex-direction:column;gap:10px"></div>
       <button class="btn sm" id="addRow">+ Zeile hinzufügen</button>
     </div>
- 
+
     <div class="edit" id="edit" hidden>
       <div class="hd"><span id="eName"></span><small id="eZ"></small></div>
       <input type="range" id="zoom" min="30" max="400" value="100" aria-label="Zoom">
@@ -125,8 +130,8 @@ canvas{width:100%;height:auto;display:block;touch-action:pan-y;-webkit-touch-cal
       <button class="btn sm ghost" id="eDel">Bild entfernen</button>
       <div class="hint">Im Bild ziehen = verschieben, Mausrad = zoomen.</div>
     </div>
- 
-    <div><label class="l" for="title">Titel</label><input type="text" id="title" value="Vinted-Ready Product Overview"></div>
+
+    <div id="titleBox"><label class="l" for="title">Titel</label><input type="text" id="title" value="Vinted-Ready Product Overview"></div>
     <div><label class="l">Format</label><div class="seg" id="segFmt" style="grid-template-columns:repeat(2,1fr)"></div></div>
     <div><label class="l">Breite</label><div class="seg" id="segSize" style="grid-template-columns:repeat(3,1fr)"></div></div>
     <button class="btn pri" id="export">Exportieren</button>
@@ -137,7 +142,7 @@ canvas{width:100%;height:auto;display:block;touch-action:pan-y;-webkit-touch-cal
     <div class="cvwrap"><canvas id="cv" width="1000" height="1333"></canvas></div>
   </div>
 </div>
- 
+
 <div class="ov" id="ov">
   <div class="modal" role="dialog" aria-modal="true" aria-label="Bild zuordnen">
     <div class="pvbox"><img id="pv" alt=""></div>
@@ -147,7 +152,7 @@ canvas{width:100%;height:auto;display:block;touch-action:pan-y;-webkit-touch-cal
   </div>
 </div>
 <div class="toast" id="toast"></div>
- 
+
 <script>
 var $=function(id){return document.getElementById(id)};
 var SLOTS=[
@@ -156,13 +161,15 @@ var SLOTS=[
   {key:'print',name:'Logo / Print',sub:'Detail',label:'LOGO / PRINT',fit:'cover'},
   {key:'label',name:'Etikett',sub:'Größe & Material',label:'INSIDE LABELS & SIZE',fit:'cover'},
   {key:'defect',name:'Defekte',sub:'Flecken, Risse',label:'DEFECTS',fit:'cover'},
-  {key:'detail',name:'Detail',sub:'Extra',label:'DETAIL',fit:'cover'}
+  {key:'detail',name:'Detail',sub:'Extra',label:'DETAIL',fit:'cover'},
+  {key:'photo',name:'Foto',sub:'Einzelbild',label:'',fit:'contain'}
 ];
 var LAYOUTS={
   grid4:{rows:[{h:1,c:['front','back']},{h:1,c:['print','label']}]},
   hero:{rows:[{h:1.5,c:['front']},{h:1,c:['back','print','label']}]},
   grid6:{rows:[{h:1,c:['front','back']},{h:1,c:['print','label']},{h:1,c:['defect','detail']}]},
-  custom:{rows:[]}
+  custom:{rows:[]},
+  foto:{bare:true,rows:[{h:1,c:['photo']}]}
 };
 var cur='grid4', imgs={}, view={}, born={}, hover='', sel='', drag=null;
 var nk=0, customInit=false;
@@ -175,9 +182,9 @@ var reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion:reduce)').matc
 function slot(k){return SLOTS.filter(function(s){return s.key===k})[0]}
 function resetView(k){view[k]={z:1,x:0,y:0}}
 SLOTS.forEach(function(s){imgs[s.key]=null;resetView(s.key)});
- 
+
 function rects(id,W,H,u,minGap){
-  var L=LAYOUTS[id],gap=Math.max(minGap,Math.round(4*u)),titleH=Math.round(100*u),barH=Math.round(90*u);
+  var L=LAYOUTS[id],bare=!!L.bare,gap=bare?0:Math.max(minGap,Math.round(4*u)),titleH=bare?0:Math.round(100*u),barH=bare?0:Math.round(90*u);
   var area=H-titleH,sum=0,out=[];
   L.rows.forEach(function(r){sum+=r.h});
   var y=titleH;
@@ -194,7 +201,7 @@ function rects(id,W,H,u,minGap){
 function inLayout(k){return LAYOUTS[cur].rows.some(function(r){return r.c.indexOf(k)>=0})}
 function curImg(k){return useCut[k]&&cut[k]?cut[k]:imgs[k]}
 function ease(t){return 1-Math.pow(1-t,3)}
- 
+
 function drawImg(k,img,x,y,w,h,p){
   var v=view[k],fit=slot(k).fit;
   var b=fit==='cover'?Math.max(w/img.width,h/img.height):Math.min(w/img.width,h/img.height);
@@ -213,15 +220,19 @@ function render(W,preview){
   cv.width=W;cv.height=H;
   ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
   ctx.textAlign='center';ctx.textBaseline='middle';
-  var g=rects(cur,W,H,u,2);
-  ctx.fillStyle='#111';fitText($('title').value,W*.9,Math.round(46*u));
-  ctx.fillText($('title').value,W/2,g.titleH/2);
+  var g=rects(cur,W,H,u,2),bare=!!LAYOUTS[cur].bare;
+  if(!bare){
+    ctx.fillStyle='#111';fitText($('title').value,W*.9,Math.round(46*u));
+    ctx.fillText($('title').value,W/2,g.titleH/2);
+  }
   g.c.forEach(function(c){
     var s=slot(c.key);
-    ctx.fillStyle='#efefef';ctx.fillRect(c.x,c.y,c.w,c.barH);
-    ctx.fillStyle='#111';fitText(s.label,c.w*.9,Math.round(34*u));
-    ctx.fillText(s.label,c.x+c.w/2,c.y+c.barH/2);
-    ctx.fillStyle='#e8e8e8';ctx.fillRect(c.x,c.iy,c.w,c.ih);
+    if(!bare){
+      ctx.fillStyle='#efefef';ctx.fillRect(c.x,c.y,c.w,c.barH);
+      ctx.fillStyle='#111';fitText(s.label,c.w*.9,Math.round(34*u));
+      ctx.fillText(s.label,c.x+c.w/2,c.y+c.barH/2);
+    }
+    ctx.fillStyle=bare?'#fff':'#e8e8e8';ctx.fillRect(c.x,c.iy,c.w,c.ih);
     var im=imgs[c.key];
     if(im){
       var p=1;
@@ -257,7 +268,7 @@ function updateStat(){
   $('stat').textContent=n+' von '+ks.length+' Feldern';
 }
 function setImg(k,im){imgs[k]=im;clearCut(k);resetView(k);born[k]=performance.now();sel=k;syncEdit();draw()}
- 
+
 /* Segmented Controls */
 function seg(id,opts,val,cb){
   var el=$(id);el.innerHTML='<div class="pill"></div>';
@@ -274,14 +285,15 @@ function seg(id,opts,val,cb){
 }
 seg('segFmt',[['png','PNG'],['jpg','JPG']],'png',function(v){fmt=v});
 seg('segSize',[[1200,'1200'],[1800,'1800'],[2400,'2400']],1800,function(v){size=v});
-seg('segLayout',[['grid4','2×2'],['hero','1 + 3'],['grid6','6er'],['custom','Eigen']],'grid4',function(v){
+seg('segLayout',[['grid4','2×2'],['hero','1 + 3'],['grid6','6er'],['custom','Eigen'],['foto','Foto']],'grid4',function(v){
   if(v==='custom'&&!customInit)initCustom();
   cur=v;hover='';if(sel&&!inLayout(sel))sel='';
+  $('titleBox').hidden=v==='foto';
   $('cust').hidden=v!=='custom';if(v==='custom')buildCust();
   var n=performance.now();Object.keys(imgs).forEach(function(k){if(imgs[k])born[k]=n});
   syncEdit();draw();
 });
- 
+
 /* Eigenes Layout */
 function newSlot(title,fit){var k='c'+(++nk);SLOTS.push({key:k,name:title,sub:'Eigenes Feld',label:title,fit:fit||'cover'});imgs[k]=null;resetView(k);return k}
 function dropSlot(k){
@@ -293,7 +305,7 @@ function initCustom(){
   var now=performance.now();
   LAYOUTS.custom={rows:LAYOUTS[cur].rows.map(function(row){
     return {h:row.h,c:row.c.map(function(k){
-      var s=slot(k),n=newSlot(s.label,s.fit);
+      var s=slot(k),n=newSlot(s.label||s.name,s.fit);
       imgs[n]=imgs[k];cut[n]=cut[k];useCut[n]=useCut[k];view[n]={z:view[k].z,x:view[k].x,y:view[k].y};if(imgs[k])born[n]=now;
       return n;
     })};
@@ -347,7 +359,7 @@ $('addRow').onclick=function(){
   for(var i=0;i<n;i++)row.c.push(newSlot('Feld '+(cellCount()+row.c.length+1)));
   LAYOUTS.custom.rows.push(row);changed();
 };
- 
+
 /* Feld bearbeiten */
 function syncEdit(){
   var el=$('edit');
@@ -373,7 +385,7 @@ document.addEventListener('keydown',function(e){
   if(e.key==='Delete'&&sel&&e.target.tagName!=='INPUT')removeSel();
   if(e.key==='Escape'&&$('ov').classList.contains('on')){pending.shift();next(false)}
 });
- 
+
 /* Hintergrund entfernen (lokal im Browser, @imgly/background-removal) */
 var RB_URLS=['https://esm.sh/@imgly/background-removal@1.7.0','https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm'];
 var rbCache={};
@@ -441,7 +453,7 @@ async function removeBg(k){
   busy[k]=false;syncEdit();draw();
 }
 $('bgBtn').onclick=function(){if(sel)removeBg(sel)};
- 
+
 /* Upload */
 function icon(k){
   var s='<svg width="22" height="29" viewBox="0 0 24 32">',g=rects(cur,24,32,24/1800,1);
@@ -468,6 +480,9 @@ function addFiles(files){
   function fin(){
     if(--left)return;
     loaded.forEach(function(x){if(x)pending.push(x)});
+    if(cur==='foto'&&pending.length===1&&!$('ov').classList.contains('on')){
+      var it=pending.shift();setImg('photo',it.img);return;
+    }
     if(!$('ov').classList.contains('on')){total=pending.length;next(true)}
   }
 }
@@ -489,7 +504,7 @@ function next(first){
   else{pv.classList.add('sw');setTimeout(apply,reduce?0:200)}
 }
 $('skip').onclick=function(){pending.shift();next(false)};
- 
+
 var drop=$('drop'),file=$('file');
 function pick(x,y){
   /* Menü braucht Platz nach unten, sonst verzerrt iPadOS es zum Kreis */
@@ -512,7 +527,7 @@ file.onchange=function(){
 drop.addEventListener('drop',function(e){addFiles(e.dataTransfer.files)});
 window.addEventListener('dragover',function(e){e.preventDefault()});
 window.addEventListener('drop',function(e){e.preventDefault();if(e.target!==drop&&e.dataTransfer&&e.dataTransfer.files.length)addFiles(e.dataTransfer.files)});
- 
+
 /* Canvas: Hover, Auswahl, Ziehen, Zoom */
 function cellAt(e){
   var r=cv.getBoundingClientRect(),px=(e.clientX-r.left)/r.width*cv.width,py=(e.clientY-r.top)/r.height*cv.height;
@@ -550,7 +565,7 @@ cv.addEventListener('wheel',function(e){
   if(sel!==c.key){sel=c.key}
   syncEdit();draw();
 },{passive:false});
- 
+
 function toast(t){var el=$('toast');el.textContent=t;el.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(function(){el.classList.remove('on')},2200)}
 $('title').oninput=draw;
 $('reset').onclick=function(){SLOTS.forEach(function(s){imgs[s.key]=null;clearCut(s.key);resetView(s.key)});born={};sel='';syncEdit();draw()};
@@ -559,7 +574,7 @@ $('export').onclick=function(){
   render(size,false);
   cv.toBlob(function(b){
     var a=document.createElement('a');a.href=URL.createObjectURL(b);
-    a.download='vinted-overview.'+(jpg?'jpg':'png');
+    a.download=(cur==='foto'?'foto':'vinted-overview')+'.'+(jpg?'jpg':'png');
     document.body.appendChild(a);a.click();a.remove();
     setTimeout(function(){URL.revokeObjectURL(a.href)},800);
     render(1000,true);draw();toast('Gespeichert ✓');
